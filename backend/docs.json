@@ -1,0 +1,22 @@
+[
+  {
+    "title": "Reset Password",
+    "content": "Users can reset their password from Settings > Security. Click 'Forgot Password' and follow email instructions."
+  },
+  {
+    "title": "Update Email",
+    "content": "To update your email, go to Profile > Personal Info and edit your email address."
+  },
+  {
+    "title": "Subscription Cancellation",
+    "content": "Subscriptions can be cancelled from Billing > Manage Plan."
+  },
+  {
+    "title": "Two Factor Authentication",
+    "content": "Users can enable two-factor authentication under Security Settings."
+  },
+  {
+    "title": "Refund Policy",
+    "content": "Refunds are processed within 5-7 business days after approval."
+  }
+]
