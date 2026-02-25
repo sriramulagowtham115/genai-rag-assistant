@@ -6,60 +6,81 @@ import { chunkText } from "./chunker.js";
 import { storeVector } from "./vectorStore.js";
 import { loadEmbeddingModel, getEmbedding } from "./embeddings.js";
 import { retrieveRelevantChunks } from "./rag.js";
-import { saveMessage, getHistory } from "./sessionStore.js";
+import { saveMessage } from "./sessionStore.js";
 
 const app = express();
-app.use(cors());
+
+/* ---------------- CORS CONFIG ---------------- */
+
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+
 app.use(express.json());
 
-/* ---------- Initialize Embeddings ---------- */
+/* ---------------- HEALTH CHECK ---------------- */
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK" });
+});
+
+/* ---------------- INITIALIZE EMBEDDINGS ---------------- */
 
 async function initializeEmbeddings() {
-  await loadEmbeddingModel();
+  try {
+    console.log("Loading embedding model...");
+    await loadEmbeddingModel();
 
-  const docs = JSON.parse(fs.readFileSync("./docs.json"));
+    const docs = JSON.parse(fs.readFileSync("./docs.json"));
 
-  for (let doc of docs) {
-    const chunks = chunkText(doc.content);
+    for (let doc of docs) {
+      const chunks = chunkText(doc.content);
 
-    for (let chunk of chunks) {
-      const embedding = await getEmbedding(chunk);
-      storeVector(doc.title, embedding, chunk);
+      for (let chunk of chunks) {
+        const embedding = await getEmbedding(chunk);
+        storeVector(doc.title, embedding, chunk);
+      }
     }
-  }
 
-  console.log("Documents embedded locally.");
+    console.log("Documents embedded successfully.");
+  } catch (error) {
+    console.error("Error initializing embeddings:", error);
+  }
 }
 
 await initializeEmbeddings();
 
-/* ---------- Simple Local Generator ---------- */
+/* ---------------- SIMPLE LOCAL GENERATOR ---------------- */
 
-function generateAnswerFromContext(context, question) {
+function generateAnswerFromContext(context) {
   return `
 Based on the available information:
 
 ${context}
 
-(Answer generated from retrieved context only.)
+(Answer generated strictly from retrieved context.)
 `;
 }
 
-/* ---------- Chat API ---------- */
+/* ---------------- CHAT ENDPOINT ---------------- */
 
 app.post("/api/chat", async (req, res) => {
   try {
     const { sessionId, message } = req.body;
 
     if (!sessionId || !message) {
-      return res.status(400).json({ error: "Invalid input" });
+      return res.status(400).json({
+        error: "Invalid input"
+      });
     }
 
     saveMessage(sessionId, "user", message);
 
     const retrievedChunks = await retrieveRelevantChunks(message);
 
-    if (retrievedChunks.length === 0) {
+    if (!retrievedChunks || retrievedChunks.length === 0) {
       return res.json({
         reply: "I do not have enough information.",
         retrievedChunks: 0
@@ -70,7 +91,7 @@ app.post("/api/chat", async (req, res) => {
       .map(chunk => chunk.text)
       .join("\n");
 
-    const reply = generateAnswerFromContext(contextText, message);
+    const reply = generateAnswerFromContext(contextText);
 
     saveMessage(sessionId, "assistant", reply);
 
@@ -80,11 +101,17 @@ app.post("/api/chat", async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Chat API Error:", error);
+    res.status(500).json({
+      error: "Internal Server Error"
+    });
   }
 });
 
-app.listen(5000, () =>
-  console.log("Server running on http://localhost:5000")
-);
+/* ---------------- START SERVER ---------------- */
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
